@@ -1,0 +1,7 @@
+tokens:
+  warningThreshold: 1500
+  fallbackLimit: 2000
+  limits:
+    defaults:
+      "*.agent.md": 1000
+      "tasks/*.yaml": 500
