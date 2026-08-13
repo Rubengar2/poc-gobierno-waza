@@ -1,3 +1,0 @@
-mock_response: '{"cliente": "Empresa S.A.", "total": 150.50}'
-expected_graders:
-  validador_esquema: pass

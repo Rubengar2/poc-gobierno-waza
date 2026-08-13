@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "vulnerabilidades": { "type": "integer" },
+    "estado": { "type": "string" }
+  },
+  "required": ["vulnerabilidades", "estado"],
+  "additionalProperties": false
+}

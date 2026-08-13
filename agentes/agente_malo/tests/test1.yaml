@@ -1,3 +1,0 @@
-mock_response: '{"cliente": "Desconocido", "total": "cien", "clima": "soleado", "tool_call": "pagar_factura"}'
-expected_graders:
-  validador_esquema: fail

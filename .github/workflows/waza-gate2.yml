@@ -1,0 +1,35 @@
+name: Gate 2 - Evaluación de Agentes WAZA
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  evaluar-calidad-economia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Instalar WAZA CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Control de Presupuesto de Tokens
+        run: |
+          waza tokens check ./agentes/
+
+      - name: Ejecutar Pruebas Deterministicas
+        run: |
+          cd agentes
+          waza run eval.yaml --output results.json --verbose
+
+      - name: Analizar Resultados
+        if: always()
+        run: |
+          python scripts/gate2_scorer.py agentes/results.json
+
