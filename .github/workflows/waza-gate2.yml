@@ -2,7 +2,8 @@ name: Gate 2 - Evaluación de Agentes WAZA
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   evaluar-calidad-economia:
@@ -18,16 +19,17 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: [ECONOMÍA] Control de Presupuesto de Tokens
+      - name: Control de Presupuesto de Tokens
         run: |
           waza tokens check ./agentes/
 
-      - name: [CALIDAD Y SEGURIDAD] Ejecutar Pruebas Determinísticas
+      - name: Ejecutar Pruebas Deterministicas
         run: |
           cd agentes
           waza run eval.yaml --output results.json --verbose
 
-      - name: Analizar Resultados (Python)
+      - name: Analizar Resultados
         if: always()
         run: |
-          python ../scripts/gate2_scorer.py agentes/results.json
+          python scripts/gate2_scorer.py agentes/results.json
+
