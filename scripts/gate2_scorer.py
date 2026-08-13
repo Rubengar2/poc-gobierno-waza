@@ -37,7 +37,7 @@ def evaluar_agente(ruta_resultados, ruta_instrucciones):
     return score, hard_gate_fail
 
 if __name__ == "__main__":
-    agentes = ["agentes/agente_bueno", "agentes/agente_malo"]
+    agentes = ["agentes/agente_bueno", "agentes/agente_malo", "agentes/agente_regular"]
     estado_final = 0
 
     for agente in agentes:
