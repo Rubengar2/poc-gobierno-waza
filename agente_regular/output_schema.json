@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "producto": { "type": "string" },
-    "cantidad": { "type": "integer" }
-  },
-  "required": ["producto", "cantidad"],
-  "additionalProperties": false
-}

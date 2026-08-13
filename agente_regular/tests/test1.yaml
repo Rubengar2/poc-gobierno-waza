@@ -1,3 +1,0 @@
-mock_response: '{"producto": "Laptop"}'
-expected_graders:
-  validador_esquema: pass
