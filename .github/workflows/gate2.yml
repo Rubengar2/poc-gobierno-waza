@@ -20,6 +20,11 @@ jobs:
         run: |
           cd agentes/agente_bueno
           waza run eval.yaml --output results.json || true
+
+      - name: Ejecutar WAZA en Agente Regular
+        run: |
+          cd agentes/agente_regular
+          waza run eval.yaml --output results.json || true
           
       - name: Ejecutar WAZA en Agente Malo
         run: |
@@ -28,5 +33,3 @@ jobs:
 
       - name: Calcular Scoring y Decisión Final
         run: python scripts/gate2_scorer.py
-
-
