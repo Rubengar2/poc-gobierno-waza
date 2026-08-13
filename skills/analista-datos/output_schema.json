@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "status": { "type": "string" },
-    "registros_leidos": { "type": "integer" }
-  },
-  "required": ["status", "registros_leidos"]
-}
