@@ -12,14 +12,16 @@ def evaluar_resultados(ruta_resultados):
         with open(ruta_resultados, 'r') as f:
             waza_data = json.load(f)
             
-        outcomes = waza_data.get("outcomes", [])
-        if not outcomes:
-            print("[-] Falla: WAZA no generó 'outcomes' válidos. Revisa el eval.yaml.")
+        # Corregido: WAZA agrupa los resultados en un array llamado "tasks"
+        tasks = waza_data.get("tasks", [])
+        if not tasks:
+            print("[-] Falla: WAZA no generó pruebas válidas en el JSON. Revisa el eval.yaml.")
             score -= 20
             
-        for outcome in outcomes:
-            if outcome.get("status") == "failed":
-                print(f"[-] Falla (Calidad/Seguridad): La tarea '{outcome.get('task', 'desconocida')}' falló.")
+        for task in tasks:
+            # WAZA usa el booleano "passed" en cada tarea
+            if not task.get("passed", False):
+                print(f"[-] Falla (Calidad/Seguridad): La tarea '{task.get('name', 'desconocida')}' falló.")
                 score -= 30
                 hard_gate_fail = True
     else:
@@ -40,8 +42,7 @@ if __name__ == "__main__":
     
     if score < 80 or hard_gate:
         print(f"🚨 VEREDICTO FINAL: BLOCK (Falla el Gate 2)\n")
-        sys.exit(1) # Código 1 bloquea la PR en GitHub Actions
+        sys.exit(1)
     else:
         print(f"✅ VEREDICTO FINAL: PASS\n")
-        sys.exit(0) # Código 0 permite la PR
-
+        sys.exit(0)
