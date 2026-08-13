@@ -1,0 +1,32 @@
+name: Evaluacion Gate 2 WAZA
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  gate2-scoring:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar WAZA CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
+          echo "$HOME/.waza/bin" >> $GITHUB_PATH
+
+      - name: Ejecutar WAZA en Agente Bueno
+        run: |
+          cd agentes/agente_bueno
+          waza run eval.yaml --output results.json || true
+          
+      - name: Ejecutar WAZA en Agente Malo
+        run: |
+          cd agentes/agente_malo
+          waza run eval.yaml --output results.json || true
+
+      - name: Calcular Scoring y Decisión Final
+        run: python scripts/gate2_scorer.py
+
+
