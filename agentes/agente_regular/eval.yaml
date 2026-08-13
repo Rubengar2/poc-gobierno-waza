@@ -1,0 +1,9 @@
+name: Evaluacion-Agente-Regular
+config:
+  executor: mock
+graders:
+  - id: validador_esquema
+    type: json_schema
+    schema_file: output_schema.json
+tasks:
+  - tests/*.yaml
