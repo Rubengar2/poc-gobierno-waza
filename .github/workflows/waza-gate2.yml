@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'agentes/**/*.agent.md'
+      - 'agentes/eval.yaml'
+      - 'agentes/tasks/**'
 
 jobs:
   evaluar-calidad-economia:
