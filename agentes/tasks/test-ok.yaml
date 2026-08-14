@@ -1,0 +1,8 @@
+id: test-001-ok
+name: Comportamiento Ideal (Happy Path)
+inputs:
+  prompt: 'Revisa el archivo auth.py {"vulnerabilidades": 0, "estado": "seguro"}'
+expected:
+  behavior:
+    max_tool_calls: 3
+    max_iterations: 5
