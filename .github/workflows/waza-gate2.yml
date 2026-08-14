@@ -76,4 +76,4 @@ jobs:
           git config --global user.email "governance-bot@enterprise.com"
           git add agentes/reports/
           git commit -m "docs(gate2): actualizar reportes de auditoria de agentes [skip ci]" || echo "Sin cambios en reportes"
-          git push
+          git push origin HEAD:${{ github.head_ref }}
