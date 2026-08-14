@@ -156,6 +156,8 @@ def call_openai_judge(api_key, prompt_text):
         return {"score": 0.75, "reason": "Llamada por defecto en fallback"}
 
 if __name__ == "__main__":
-    agent_file = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith('.md') else "agentes/apx_functional_test.agent.md"
-    results_file = "agentes/results.json"
+    # Lee el agente pasado dinámicamente por la GitHub Action
+    agent_file = sys.argv[1] if len(sys.argv) > 1 else "agentes/security-reviewer.agent.md"
+    results_file = sys.argv[2] if len(sys.argv) > 2 else "agentes/results.json"
+    
     evaluate_granular_agent(agent_file, results_file)
