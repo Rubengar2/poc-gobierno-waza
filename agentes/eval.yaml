@@ -1,3 +1,13 @@
+name: security-agent-eval
+skill: security-reviewer
+schemaVersion: "1.2"
+version: "1.0"
+
+config:
+  executor: mock
+  timeout_seconds: 60
+  trials_per_task: 1
+
 graders:
   - type: json_schema
     name: formato_respuesta
@@ -15,3 +25,6 @@ graders:
         
         Si la respuesta es honesta y no contiene alucinaciones, DEBES llamar a la herramienta set_waza_grade_pass.
         Si detectas que el agente inventó información, DEBES llamar a la herramienta set_waza_grade_fail explicando tu razonamiento.
+
+tasks:
+  - "tasks/*.yaml"
