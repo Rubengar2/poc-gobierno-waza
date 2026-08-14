@@ -9,13 +9,15 @@ jobs:
   evaluar-calidad-economia:
     name: evaluar-calidad-economia
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Permite al bot publicar comentarios en el PR
 
     steps:
-      - name: Descargar Repositorio con Historial Git
+      - name: Descargar Repositorio
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Entorno Python
         uses: actions/setup-python@v5
@@ -38,9 +40,8 @@ jobs:
             TARGETS=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | grep -E '^agentes/.*\.agent\.md$' | tr '\n' ' ' || true)
           fi
 
-          # Fallback si el commit es solo de reportes o mantenimiento
           if [ -z "$TARGETS" ]; then
-            echo "ℹ️ No hay deltas de agentes en este commit. Ejecutando verificación general."
+            echo "ℹ️ No hay deltas específicos. Evaluando agentes disponibles."
             TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           fi
           
@@ -67,16 +68,22 @@ jobs:
             python scripts/gate2_scorer.py "$agent" "agentes/results.json"
           done
 
-      - name: Persistir Reportes de Auditoría en el Repositorio
+      - name: Publicar Reporte de Auditoría como Comentario en el PR
         if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "Gate 2 Governance Bot"
-          git config --global user.email "governance-bot@enterprise.com"
-          git add agentes/reports/
-          
-          if git diff --staged --quiet; then
-            echo "Sin cambios en los reportes de auditoría."
-          else
-            git commit -m "docs(gate2): actualizar reportes de auditoria"
-            git push origin HEAD:${{ github.head_ref }}
+          # Consolidar todos los reportes LATEST generados en un solo archivo temporal
+          if [ -d "agentes/reports" ]; then
+            cat agentes/reports/*/LATEST.md > report_summary.md 2>/dev/null || true
+            if [ -s "report_summary.md" ]; then
+              gh pr comment ${{ github.event.pull_request.number }} --body-file report_summary.md || echo "No se pudo publicar comentario en el PR."
+            fi
           fi
+
+      - name: Adjuntar Reportes como Artefactos de la Ejecución
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate2-audit-reports
+          path: agentes/reports/
