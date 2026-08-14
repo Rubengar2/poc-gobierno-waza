@@ -4,22 +4,20 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'agentes/**/*.agent.md'
-      - 'agentes/eval.yaml'
-      - 'agentes/tasks/**'
-      - 'scripts/gate2_scorer.py'
 
 jobs:
   evaluar-calidad-economia:
     name: evaluar-calidad-economia
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Permite al bot publicar comentarios en el PR
 
     steps:
-      - name: Descargar Repositorio con Historial Git
+      - name: Descargar Repositorio
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necesario para calcular el diff entre ramas
+          fetch-depth: 0
 
       - name: Configurar Entorno Python
         uses: actions/setup-python@v5
@@ -33,19 +31,21 @@ jobs:
       - name: Identificar Agentes a Evaluar (Delta Check)
         id: delta
         run: |
-          # Detectar si cambiaron reglas globales de scoring
           GLOBAL_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E 'scripts/gate2_scorer.py|agentes/eval.yaml' || true)
           
           if [ -n "$GLOBAL_CHANGES" ]; then
             echo "⚠️ Reglas globales modificadas. Se evaluarán TODOS los agentes."
             TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           else
-            # Filtrar solo los archivos .agent.md agregados o modificados en este PR
             TARGETS=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | grep -E '^agentes/.*\.agent\.md$' | tr '\n' ' ' || true)
+          fi
+
+          if [ -z "$TARGETS" ]; then
+            echo "ℹ️ No hay deltas específicos. Evaluando agentes disponibles."
+            TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           fi
           
           echo "ARCHIVOS_A_EVALUAR=$TARGETS" >> $GITHUB_ENV
-          echo "Agentes detectados para evaluación: $TARGETS"
 
       - name: Control de Presupuesto de Tokens
         run: |
@@ -62,9 +62,28 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # Evaluar secuencialmente solo los agentes detectados en el delta
           for agent in $ARCHIVOS_A_EVALUAR; do
             echo "----------------------------------------------------"
             echo "PROCESANDO AGENTE: $agent"
             python scripts/gate2_scorer.py "$agent" "agentes/results.json"
           done
+
+      - name: Publicar Reporte de Auditoría como Comentario en el PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Consolidar todos los reportes LATEST generados en un solo archivo temporal
+          if [ -d "agentes/reports" ]; then
+            cat agentes/reports/*/LATEST.md > report_summary.md 2>/dev/null || true
+            if [ -s "report_summary.md" ]; then
+              gh pr comment ${{ github.event.pull_request.number }} --body-file report_summary.md || echo "No se pudo publicar comentario en el PR."
+            fi
+          fi
+
+      - name: Adjuntar Reportes como Artefactos de la Ejecución
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate2-audit-reports
+          path: agentes/reports/
