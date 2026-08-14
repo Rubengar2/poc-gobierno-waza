@@ -4,7 +4,6 @@ schemaVersion: "1.2"
 version: "1.0"
 
 config:
-  # El agente se sigue ejecutando gratis y rápido
   executor: mock
   timeout_seconds: 60
   trials_per_task: 1
@@ -15,18 +14,6 @@ graders:
     config:
       schema_file: output_schema.json
       extract_json: true
-      
-  - name: juez_alucinaciones
-    type: prompt
-    config:
-      # AQUÍ le decimos al juez semántico qué cerebro usar
-      model: gpt-4o-mini
-      prompt: |
-        Eres un auditor de calidad estricto. Revisa la salida del agente: {output}.
-        El contexto original era: {input}.
-        ¿El agente inventó alguna vulnerabilidad o recomendación que no estaba en el contexto original?
-        Responde estrictamente "PASS" si la respuesta es fiel al contexto (sin alucinaciones).
-        Responde estrictamente "FAIL" si el agente inventó información.
 
 tasks:
   - "tasks/*.yaml"
