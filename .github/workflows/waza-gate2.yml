@@ -1,4 +1,4 @@
-name: Gate 2 - Evaluación de Agentes WAZA
+name: Gate 2 - Governance Pipeline
 
 on:
   pull_request:
@@ -11,31 +11,31 @@ on:
 
 jobs:
   evaluar-calidad-economia:
+    name: Evaluación Híbrida Gate 2
     runs-on: ubuntu-latest
+
     steps:
       - name: Descargar Repositorio
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Instalar WAZA CLI
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
-          echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Configurar Entorno Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Control de Presupuesto de Tokens
         run: |
           waza tokens check ./agentes/
 
-      - name: Ejecutar Pruebas Deterministicas y Semanticas
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Ejecutar Pruebas Determinísticas (WAZA)
+        continue-on-error: true
         run: |
           cd agentes
           waza run eval.yaml --output results.json --verbose
 
-      - name: Analizar Resultados
+      - name: Analizar Resultados e Integrar Score (Híbrido)
         if: always()
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python scripts/gate2_scorer.py agentes/results.json
-
