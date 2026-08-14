@@ -23,7 +23,9 @@ jobs:
         run: |
           waza tokens check ./agentes/
 
-      - name: Ejecutar Pruebas Deterministicas
+      - name: Ejecutar Pruebas Deterministicas y Semanticas
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           cd agentes
           waza run eval.yaml --output results.json --verbose
