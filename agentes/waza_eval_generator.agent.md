@@ -1,6 +1,6 @@
 ---
 name: 🛠️ waza_eval_generator
-owner: platform.governance1@enterprise.com
+owner: platform.governance@enterprise.com
 version: "1.2.0"
 description: "Specialized engineering agent for discovering AI agent prompts, scaffolding deterministic WAZA evaluation suites (eval.yaml, tasks, fixtures), and enforcing CI/CD quality gates."
 tools: ['read', 'search', 'edit', 'execute/runInTerminal', 'web/githubRepo', 'read/problems']
