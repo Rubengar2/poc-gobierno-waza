@@ -76,6 +76,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "Sin cambios en los reportes de auditoría."
           else
-            git commit -m "docs(gate2): actualizar reportes de auditoria [skip ci]"
+            git commit -m "docs(gate2): actualizar reportes de auditoria"
             git push origin HEAD:${{ github.head_ref }}
           fi
