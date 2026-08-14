@@ -9,8 +9,8 @@ config:
   trials_per_task: 1
 
 graders:
-  - type: json_schema
-    name: formato_respuesta
+  - name: formato_respuesta
+    type: json_schema
     config:
       schema_file: output_schema.json
       extract_json: true
