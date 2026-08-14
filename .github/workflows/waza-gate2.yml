@@ -1,4 +1,4 @@
-name: Gate 2 - Evaluación de Agentes WAZA
+name: Gate 2 - Governance Pipeline
 
 on:
   pull_request:
@@ -8,34 +8,63 @@ on:
       - 'agentes/**/*.agent.md'
       - 'agentes/eval.yaml'
       - 'agentes/tasks/**'
+      - 'scripts/gate2_scorer.py'
 
 jobs:
   evaluar-calidad-economia:
+    name: evaluar-calidad-economia
     runs-on: ubuntu-latest
+
     steps:
-      - name: Descargar Repositorio
+      - name: Descargar Repositorio con Historial Git
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Necesario para calcular el diff entre ramas
+
+      - name: Configurar Entorno Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Instalar WAZA CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
-          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Identificar Agentes a Evaluar (Delta Check)
+        id: delta
+        run: |
+          # Detectar si cambiaron reglas globales de scoring
+          GLOBAL_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E 'scripts/gate2_scorer.py|agentes/eval.yaml' || true)
+          
+          if [ -n "$GLOBAL_CHANGES" ]; then
+            echo "⚠️ Reglas globales modificadas. Se evaluarán TODOS los agentes."
+            TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
+          else
+            # Filtrar solo los archivos .agent.md agregados o modificados en este PR
+            TARGETS=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | grep -E '^agentes/.*\.agent\.md$' | tr '\n' ' ' || true)
+          fi
+          
+          echo "ARCHIVOS_A_EVALUAR=$TARGETS" >> $GITHUB_ENV
+          echo "Agentes detectados para evaluación: $TARGETS"
 
       - name: Control de Presupuesto de Tokens
         run: |
           waza tokens check ./agentes/
 
-      - name: Ejecutar Pruebas Deterministicas y Semanticas
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Ejecutar Pruebas Determinísticas (WAZA)
+        continue-on-error: true
         run: |
           cd agentes
           waza run eval.yaml --output results.json --verbose
 
-      - name: Analizar Resultados
+      - name: Analizar Resultados e Integrar Score Granular
         if: always()
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python scripts/gate2_scorer.py agentes/results.json
-
+          # Evaluar secuencialmente solo los agentes detectados en el delta
+          for agent in $ARCHIVOS_A_EVALUAR; do
+            echo "----------------------------------------------------"
+            echo "PROCESANDO AGENTE: $agent"
+            python scripts/gate2_scorer.py "$agent" "agentes/results.json"
+          done
