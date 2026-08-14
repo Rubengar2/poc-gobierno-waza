@@ -23,9 +23,9 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar WAZA CLI
+      - name: Instalar WAZA CLI (Oficial Microsoft)
         run: |
-          npm install -g @waza/cli || npm install -g waza
+          curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
 
       - name: Control de Presupuesto de Tokens
         run: |
