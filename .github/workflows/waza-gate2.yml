@@ -11,7 +11,7 @@ on:
 
 jobs:
   evaluar-calidad-economia:
-    name: Evaluación Híbrida Gate 2
+    name: evaluar-calidad-economia
     runs-on: ubuntu-latest
 
     steps:
@@ -22,6 +22,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Instalar WAZA CLI
+        run: |
+          npm install -g @waza/cli || npm install -g waza
 
       - name: Control de Presupuesto de Tokens
         run: |
