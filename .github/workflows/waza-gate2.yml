@@ -4,11 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'agentes/**/*.agent.md'
-      - 'agentes/eval.yaml'
-      - 'agentes/tasks/**'
-      - 'scripts/gate2_scorer.py'
 
 jobs:
   evaluar-calidad-economia:
@@ -41,6 +36,12 @@ jobs:
             TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           else
             TARGETS=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | grep -E '^agentes/.*\.agent\.md$' | tr '\n' ' ' || true)
+          fi
+
+          # Fallback si el commit es solo de reportes o mantenimiento
+          if [ -z "$TARGETS" ]; then
+            echo "ℹ️ No hay deltas de agentes en este commit. Ejecutando verificación general."
+            TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           fi
           
           echo "ARCHIVOS_A_EVALUAR=$TARGETS" >> $GITHUB_ENV
