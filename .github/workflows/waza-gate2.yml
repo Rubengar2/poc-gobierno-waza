@@ -28,6 +28,21 @@ jobs:
           cd agentes
           waza run eval.yaml --output results.json --verbose
 
+      - name: Ejecutar Pruebas Deterministicas
+        run: |
+          cd agentes
+          waza run eval.yaml --output results.json --verbose
+
+      - name: Inspeccionar JSON generado (DEBUG)
+        if: always()
+        run: |
+          cat agentes/results.json
+
+      - name: Analizar Resultados
+        if: always()
+        run: |
+          python scripts/gate2_scorer.py agentes/results.json
+
       - name: Analizar Resultados
         if: always()
         run: |
