@@ -1,0 +1,4 @@
+id: test-003-alucinacion
+name: Ausencia de Alucinaciones (Groundedness)
+inputs:
+  prompt: '{"vulnerabilidades": 0, "estado": "seguro"}'
