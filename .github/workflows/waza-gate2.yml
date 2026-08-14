@@ -19,7 +19,8 @@ jobs:
       - name: Descargar Repositorio con Historial Git
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Necesario para calcular el diff entre ramas
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Entorno Python
         uses: actions/setup-python@v5
@@ -33,19 +34,16 @@ jobs:
       - name: Identificar Agentes a Evaluar (Delta Check)
         id: delta
         run: |
-          # Detectar si cambiaron reglas globales de scoring
           GLOBAL_CHANGES=$(git diff --name-only origin/main...HEAD | grep -E 'scripts/gate2_scorer.py|agentes/eval.yaml' || true)
           
           if [ -n "$GLOBAL_CHANGES" ]; then
             echo "⚠️ Reglas globales modificadas. Se evaluarán TODOS los agentes."
             TARGETS=$(ls agentes/*.agent.md | tr '\n' ' ')
           else
-            # Filtrar solo los archivos .agent.md agregados o modificados en este PR
             TARGETS=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | grep -E '^agentes/.*\.agent\.md$' | tr '\n' ' ' || true)
           fi
           
           echo "ARCHIVOS_A_EVALUAR=$TARGETS" >> $GITHUB_ENV
-          echo "Agentes detectados para evaluación: $TARGETS"
 
       - name: Control de Presupuesto de Tokens
         run: |
@@ -62,9 +60,22 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # Evaluar secuencialmente solo los agentes detectados en el delta
           for agent in $ARCHIVOS_A_EVALUAR; do
             echo "----------------------------------------------------"
             echo "PROCESANDO AGENTE: $agent"
             python scripts/gate2_scorer.py "$agent" "agentes/results.json"
           done
+
+      - name: Persistir Reportes de Auditoría en el Repositorio
+        if: always()
+        run: |
+          git config --global user.name "Gate 2 Governance Bot"
+          git config --global user.email "governance-bot@enterprise.com"
+          git add agentes/reports/
+          
+          if git diff --staged --quiet; then
+            echo "Sin cambios en los reportes de auditoría."
+          else
+            git commit -m "docs(gate2): actualizar reportes de auditoria [skip ci]"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
