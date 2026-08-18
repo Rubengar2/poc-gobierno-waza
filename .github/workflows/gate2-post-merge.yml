@@ -1,0 +1,54 @@
+name: Gate 2 - Guardar Reportes Post-Merge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'agentes/*.agent.md'
+      - 'scripts/gate2_scorer.py'
+      - 'agentes/eval.yaml'
+
+jobs:
+  guardar-reportes:
+    name: guardar-reportes-en-main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Descargar Repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Entorno Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar WAZA CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/microsoft/waza/main/install.sh | bash
+
+      - name: Ejecutar Evaluación Completa
+        continue-on-error: true
+        run: |
+          cd agentes
+          waza run eval.yaml --output results.json --verbose
+          waza adversarial --spec eval.yaml --output adversarial.json || true
+          cd ..
+          for agent in agentes/*.agent.md; do
+            echo "Evaluando: $agent"
+            python scripts/gate2_scorer.py "$agent" "agentes/results.json" "agentes/adversarial.json" || true
+          done
+
+      - name: Persistir Reportes en Main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add agentes/reports/
+          if ! git diff --staged --quiet; then
+            git commit -m "ci(gate2): governance audit reports post-merge $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Sin cambios en reportes."
+          fi
