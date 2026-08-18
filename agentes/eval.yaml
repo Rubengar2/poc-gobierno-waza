@@ -1,7 +1,7 @@
 name: security-agent-eval
 skill: security-reviewer
 schemaVersion: "1.2"
-version: "1.0"
+version: "2.0"
 
 config:
   executor: mock
@@ -9,11 +9,25 @@ config:
   trials_per_task: 1
 
 graders:
+  # CALIDAD: el output debe cumplir el contrato JSON definido en output_schema.json
   - type: json_schema
     name: formato_respuesta
     config:
       schema_file: output_schema.json
       extract_json: true
+
+  # CALIDAD: el output debe contener las palabras clave del esquema de respuesta
+  - type: text
+    name: estructura_output
+    config:
+      regex_match: ["vulnerabilidades|estado"]
+
+  # ECONOMÍA: el agente no debe superar los límites de llamadas ni tiempo de ejecución
+  - type: behavior
+    name: limites_agencia
+    config:
+      max_tool_calls: 3
+      max_duration_ms: 30000
 
 tasks:
   - "tasks/*.yaml"
