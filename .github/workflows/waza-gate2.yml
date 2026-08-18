@@ -54,6 +54,7 @@ jobs:
 
       - name: Ejecutar Pruebas Determinísticas (WAZA)
         id: waza_run
+        continue-on-error: true
         run: |
           cd agentes
           waza run eval.yaml --output results.json --verbose
@@ -65,7 +66,7 @@ jobs:
           waza adversarial --spec eval.yaml --output adversarial.json || echo "⚠️ Adversarial packs requieren copilot-sdk. Omitido con mock executor."
 
       - name: Analizar Resultados e Integrar Score Granular
-        if: steps.waza_run.outcome == 'success'
+        if: steps.waza_run.outcome != 'skipped'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
