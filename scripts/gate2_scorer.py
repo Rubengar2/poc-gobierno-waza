@@ -55,13 +55,35 @@ def parse_waza_results(waza_results_path):
     if not raw:
         return None
 
+    # Build positional task map from the tasks/ directory (same sort order WAZA uses)
+    def _load_task_order(results_path):
+        tasks_dir = os.path.join(os.path.dirname(results_path or ''), 'tasks')
+        if not os.path.isdir(tasks_dir):
+            return []
+        order = []
+        for fname in sorted(os.listdir(tasks_dir)):
+            if not fname.endswith('.yaml'):
+                continue
+            try:
+                with open(os.path.join(tasks_dir, fname), 'r', encoding='utf-8') as f:
+                    txt = f.read()
+                id_m   = re.search(r'^id:\s*(\S+)',  txt, re.MULTILINE)
+                name_m = re.search(r'^name:\s*(.+)', txt, re.MULTILINE)
+                tid  = id_m.group(1).strip()   if id_m   else fname
+                tname= name_m.group(1).strip() if name_m else tid
+            except Exception:
+                tid = tname = fname
+            order.append((tid, tname))
+        return order
+
+    task_order = _load_task_order(waza_results_path)
+
     def _extract_id(r):
         """Extract task ID from WAZA result entry, handling nested and camelCase formats."""
         for key in ('task_id', 'id', 'taskId', 'task_name', 'taskName'):
             val = r.get(key)
             if val and str(val).strip():
                 return str(val).strip()
-        # Nested task object (e.g. {"task": {"id": "...", "name": "..."}})
         task_obj = r.get('task')
         if isinstance(task_obj, dict):
             for key in ('id', 'task_id', 'name'):
@@ -84,9 +106,18 @@ def parse_waza_results(waza_results_path):
         return fallback
 
     axes = {ax: [] for ax in ('seguridad', 'calidad', 'economia')}
-    for r in raw:
-        task_id   = _extract_id(r) or '?'
-        task_name = _extract_name(r, task_id)
+    for idx, r in enumerate(raw):
+        task_id   = _extract_id(r)
+        task_name = _extract_name(r, task_id or '')
+
+        # Positional fallback: WAZA sorts tasks/*.yaml alphabetically, same as os.listdir+sorted
+        if (not task_id or task_id == '?') and idx < len(task_order):
+            task_id, task_name = task_order[idx]
+        elif not task_name and idx < len(task_order):
+            task_name = task_order[idx][1]
+
+        task_id   = task_id   or '?'
+        task_name = task_name or task_id
         passed    = (
             r.get('passed') is True
             or str(r.get('status', '')).lower() in ('pass', 'passed', 'ok', 'success')
