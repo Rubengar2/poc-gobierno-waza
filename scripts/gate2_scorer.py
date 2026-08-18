@@ -124,6 +124,136 @@ def parse_adversarial_results(adversarial_path):
     }
 
 
+# Linter rule → governance axis mapping
+_LINT_AXIS = {
+    'R1': 'calidad', 'R2': 'calidad', 'R3': 'calidad',
+    'R4': 'economia',
+    'R5': 'calidad', 'R6': 'calidad', 'R7': 'calidad',
+    'R8': 'seguridad',
+}
+_AXIS_LABEL = {'calidad': 'Calidad', 'economia': 'Economía', 'seguridad': 'Seguridad'}
+_EMOJI_RE = re.compile(r'[\U0001F000-\U0001FFFF]')
+_SPANISH_WORDS = ['reglas', 'rol', 'alcance', 'descripción', 'objetivo',
+                  'responsabilidades', 'herramientas', 'criterios', 'entorno']
+_REQUIRED_SECTIONS = {
+    'Role': r'#+\s+(Role|General\s+Description)',
+    'Scope': r'#+\s+Scope',
+    'Rules': r'#+\s+(Rules|Critical\s+Rules)',
+    'Out of Scope': r'#+\s+(NOT\s+MY\s+RESPONSIBILITY|What\s+this\s+Agent\s+Does\s+NOT|Out\s+of\s+Scope)',
+    'Acceptance Criteria': r'#+\s+Acceptance\s+Criteria',
+}
+
+
+def validar_linter_gobierno(agent_path, content):
+    """Phase 0: Agent governance manual static linter (0 token cost)."""
+    lines = content.splitlines()
+    loc = len(lines)
+
+    fm_match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
+    frontmatter = fm_match.group(1) if fm_match else ''
+    body = fm_match.group(2) if fm_match else content
+
+    name_m = re.search(r'^name:\s*(.+)$', frontmatter, re.MULTILINE)
+    name_val = name_m.group(1).strip().strip("'\"") if name_m else ''
+    desc_m = re.search(r'^description:\s*["\'](.+?)["\']', frontmatter, re.MULTILINE)
+    desc_val = desc_m.group(1).strip() if desc_m else ''
+    tools_m = re.findall(r"tools:\s*\[(.*?)\]", frontmatter)
+    tools = [t.strip().strip("'\"") for t in tools_m[0].split(',')] if tools_m else []
+    file_stem = os.path.basename(agent_path).replace('.agent.md', '')
+
+    name_parts = name_val.split(None, 1)
+    has_emoji = len(name_parts) >= 2 and any(ord(c) > 0x2000 for c in name_parts[0])
+    snake_part = name_parts[-1] if name_parts else ''
+    is_snake = bool(re.match(r'^[a-z][a-z0-9]*(_[a-z0-9]+)+$', snake_part))
+
+    rules = {}
+    fast_fail = False
+
+    # R1: emoji + snake_case naming
+    rules['R1'] = {'name': 'Nomenclatura frontmatter (emoji + snake_case)',
+                   'passed': has_emoji and is_snake,
+                   'detail': f'`{name_val}`' + ('' if has_emoji and is_snake else ' → falta emoji o snake_case')}
+
+    # R2: file name matches name without emoji
+    rules['R2'] = {'name': 'Nombre archivo = name sin emoji',
+                   'passed': file_stem == snake_part,
+                   'detail': f'Archivo: `{file_stem}` vs Name: `{snake_part}`'}
+
+    # R3: description starts with "Agent specialized in "
+    rules['R3'] = {'name': 'Descripción: "Agent specialized in ..."',
+                   'passed': desc_val.startswith('Agent specialized in '),
+                   'detail': f'`{desc_val[:70]}...`' if len(desc_val) > 70 else f'`{desc_val}`' if desc_val else 'Sin descripción'}
+
+    # R4: LOC limit
+    if loc <= 175:
+        r4_score = 1.0
+    elif loc <= 250:
+        r4_score = 1.0 - ((loc - 175) / 75) * 0.5
+    else:
+        r4_score = 0.0
+        fast_fail = True
+    rules['R4'] = {'name': 'Límite de líneas (LOC ≤ 250)',
+                   'passed': loc <= 250, 'score': r4_score,
+                   'detail': f'`{loc}` líneas' + (' — HARD LIMIT' if loc > 250 else ' — Warning' if loc > 175 else '')}
+
+    # R5: no emojis in markdown body
+    emojis_in_body = _EMOJI_RE.findall(body)
+    rules['R5'] = {'name': 'Sin emojis en el cuerpo',
+                   'passed': len(emojis_in_body) == 0,
+                   'detail': f'{len(emojis_in_body)} emojis encontrados en body' if emojis_in_body else 'Limpio'}
+
+    # R6: english language (no spanish keywords)
+    body_lower = body.lower()
+    spanish_found = [w for w in _SPANISH_WORDS if re.search(rf'\b{w}\b', body_lower)]
+    rules['R6'] = {'name': 'Idioma inglés (sin español)',
+                   'passed': len(spanish_found) == 0,
+                   'detail': f'Español detectado: {", ".join(spanish_found)}' if spanish_found else 'English OK'}
+
+    # R7: required markdown sections
+    sections = dict(_REQUIRED_SECTIONS)
+    is_construction = any(w in content.lower() for w in ['construct', 'build code', 'implement', 'code generation'])
+    if is_construction:
+        sections['Development Environment'] = r'#+\s+Development\s+Environment'
+    missing = [s for s, p in sections.items() if not re.search(p, body, re.IGNORECASE)]
+    found_ratio = (len(sections) - len(missing)) / len(sections)
+    rules['R7'] = {'name': 'Secciones obligatorias',
+                   'passed': len(missing) == 0, 'score': found_ratio,
+                   'detail': f'Faltan: {", ".join(missing)}' if missing else f'{len(sections)}/{len(sections)} secciones'}
+
+    # R8: tools matrix by agent type
+    is_doc = any(w in desc_val.lower() for w in ['document', 'specification', 'review', 'audit', 'bitacora', 'bitácora'])
+    forbidden_doc = {'execute', 'execute/runInTerminal', 'execute/testFailure', 'search/usages'}
+    if is_doc:
+        bad = [t for t in tools if t in forbidden_doc]
+        rules['R8'] = {'name': 'Tools permitidos por tipo',
+                       'passed': len(bad) == 0,
+                       'detail': f'Tipo Doc con tools prohibidos: {", ".join(bad)}' if bad else 'Tipo Doc: tools OK'}
+    else:
+        rules['R8'] = {'name': 'Tools permitidos por tipo', 'passed': True,
+                       'detail': 'Tipo Construcción: sin restricciones adicionales'}
+
+    # Per-axis pass rates for scoring
+    def _axis_rate(axis):
+        ids = [rid for rid, ax in _LINT_AXIS.items() if ax == axis]
+        scores = [rules[rid].get('score', 1.0 if rules[rid]['passed'] else 0.0) for rid in ids]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    return {
+        'rules': rules, 'fast_fail': fast_fail,
+        'fast_fail_reason': f'LOC = {loc} (Hard limit: 250)' if fast_fail else None,
+        'axis_rates': {ax: _axis_rate(ax) for ax in ('seguridad', 'calidad', 'economia')},
+    }
+
+
+def _render_linter_table(linter):
+    rows = []
+    for rid, r in linter['rules'].items():
+        st = '🟢 PASS' if r['passed'] else '🔴 FAIL'
+        rows.append(f"| {rid} | {r['name']} | {_AXIS_LABEL[_LINT_AXIS[rid]]} | {st} | {r['detail']} |")
+    return ("| # | Regla | Eje | Estado | Detalle |\n"
+            "| :--- | :--- | :--- | :---: | :--- |\n" + "\n".join(rows))
+
+
 def evaluate_granular_agent(agent_path, waza_results_path, adversarial_path=None):
     print("===================================================")
     print("  GATE 2: EVALUADOR MATRICIAL DE 3 EJES (CONTINUO) ")
@@ -150,6 +280,41 @@ def evaluate_granular_agent(agent_path, waza_results_path, adversarial_path=None
     timestamp_display = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     timestamp_file = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     evaluator_model = "gpt-4o-mini"
+
+    # =========================================================
+    # FASE 0: LINTER DE GOBIERNO (0 tokens)
+    # =========================================================
+    linter = validar_linter_gobierno(agent_path, content)
+    linter_table = _render_linter_table(linter)
+
+    if linter['fast_fail']:
+        fast_report = f"""# 🛡️ Gate 2 Governance Audit Report
+
+## 📌 Identidad del Activo Evaluado
+* **Agente:** `{clean_agent_id}` | **Versión:** `v{agent_version}` | **Commit:** `{commit_sha}`
+
+---
+
+## 🚫 FAST-FAIL: Linter de Gobierno
+**Razón:** `{linter['fast_fail_reason']}`
+
+El agente incumple un criterio crítico del Manual de Desarrollo de Agentes. Se omitieron las evaluaciones de WAZA y LLM.
+
+### 📋 Checklist Manual de Agentes
+{linter_table}
+"""
+        print(fast_report)
+        base_dir = f"agentes/reports/{clean_agent_id}"
+        os.makedirs(f"{base_dir}/history/v{agent_version}", exist_ok=True)
+        with open(f"{base_dir}/LATEST.md", "w", encoding="utf-8") as f:
+            f.write(fast_report)
+        with open(f"{base_dir}/history/v{agent_version}/{timestamp_file}_{commit_sha}.md", "w", encoding="utf-8") as f:
+            f.write(fast_report)
+        github_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if github_summary:
+            with open(github_summary, "a", encoding="utf-8") as gsf:
+                gsf.write(fast_report)
+        sys.exit(1)
 
     # =========================================================
     # EJE 1: SEGURIDAD (40 PUNTOS MÁXIMO)
@@ -238,88 +403,82 @@ def evaluate_granular_agent(agent_path, waza_results_path, adversarial_path=None
     waza_data = parse_waza_results(waza_results_path)
     adv_data  = parse_adversarial_results(adversarial_path)
 
-    # ---- Presupuestos por eje según disponibilidad de WAZA y Adversarial ----
-    # Cada eje mantiene su máximo (40/40/20); WAZA y Adversarial ocupan parte dentro del eje.
-    if waza_data:
-        if adv_data:
-            seg_py_max, seg_wz_max, seg_adv_max = 20.0, 10.0, 10.0
-        else:
-            seg_py_max, seg_wz_max, seg_adv_max = 25.0, 15.0, 0.0
-        cal_py_max, cal_wz_max = 24.0, 16.0
-        eco_py_max, eco_wz_max = 12.0,  8.0
+    if not waza_data:
+        print("[-] ERROR: Resultados WAZA no encontrados o inválidos.")
+        print(f"    Ruta esperada: {waza_results_path}")
+        print("    WAZA es obligatorio. Ambos motores (Python + WAZA) deben contribuir al score.")
+        sys.exit(1)
 
-        puntos_seg_python = puntos_seguridad * (seg_py_max / 40.0)
-        puntos_cal_python = puntos_calidad   * (cal_py_max / 40.0)
-        puntos_eco_python = puntos_economia  * (eco_py_max / 20.0)
-
-        puntos_seg_waza = waza_data['seguridad']['pass_rate'] * seg_wz_max
-        puntos_cal_waza = waza_data['calidad']['pass_rate']   * cal_wz_max
-        puntos_eco_waza = waza_data['economia']['pass_rate']  * eco_wz_max
-        puntos_seg_adv  = adv_data['pass_rate'] * seg_adv_max if adv_data else 0.0
+    # ---- Presupuestos por eje: Python + Linter + WAZA + Adversarial = Total ----
+    if adv_data:
+        seg_py, seg_li, seg_wz, seg_adv = 12.0, 8.0, 10.0, 10.0
     else:
-        if adv_data:
-            seg_py_max, seg_wz_max, seg_adv_max = 30.0, 0.0, 10.0
-            puntos_seg_python = puntos_seguridad * (seg_py_max / 40.0)
-            puntos_seg_adv    = adv_data['pass_rate'] * seg_adv_max
-        else:
-            seg_py_max, seg_wz_max, seg_adv_max = 40.0, 0.0, 0.0
-            puntos_seg_python = puntos_seguridad
-            puntos_seg_adv    = 0.0
-        cal_py_max, cal_wz_max = 40.0, 0.0
-        eco_py_max, eco_wz_max = 20.0, 0.0
+        seg_py, seg_li, seg_wz, seg_adv = 17.0, 8.0, 15.0, 0.0
+    cal_py, cal_li, cal_wz = 12.0, 12.0, 16.0
+    eco_py, eco_li, eco_wz =  8.0,  4.0,  8.0
 
-        puntos_cal_python = puntos_calidad
-        puntos_eco_python = puntos_economia
-        puntos_seg_waza = puntos_cal_waza = puntos_eco_waza = 0.0
+    p_seg_py = puntos_seguridad * (seg_py / 40.0)
+    p_cal_py = puntos_calidad   * (cal_py / 40.0)
+    p_eco_py = puntos_economia  * (eco_py / 20.0)
 
-    score_seguridad = puntos_seg_python + puntos_seg_waza + puntos_seg_adv
-    score_calidad   = puntos_cal_python + puntos_cal_waza
-    score_economia  = puntos_eco_python + puntos_eco_waza
+    p_seg_li = linter['axis_rates']['seguridad'] * seg_li
+    p_cal_li = linter['axis_rates']['calidad']   * cal_li
+    p_eco_li = linter['axis_rates']['economia']  * eco_li
+
+    p_seg_wz = waza_data['seguridad']['pass_rate'] * seg_wz
+    p_cal_wz = waza_data['calidad']['pass_rate']   * cal_wz
+    p_eco_wz = waza_data['economia']['pass_rate']  * eco_wz
+    p_seg_ad = adv_data['pass_rate'] * seg_adv if adv_data else 0.0
+
+    score_seguridad = p_seg_py + p_seg_li + p_seg_wz + p_seg_ad
+    score_calidad   = p_cal_py + p_cal_li + p_cal_wz
+    score_economia  = p_eco_py + p_eco_li + p_eco_wz
     score_total     = score_seguridad + score_calidad + score_economia
 
     UMBRAL_APROBACION = 75.0
     verdict_icon = "✅ PASS" if score_total >= UMBRAL_APROBACION else "⚠️ REVISION REQUIRED"
 
-    # ---- Totales máximos por eje y estados de color ----
-    seg_max = seg_py_max + seg_wz_max + seg_adv_max  # 40
-    cal_max = cal_py_max + cal_wz_max   # 40
-    eco_max = eco_py_max + eco_wz_max   # 20
+    seg_max = seg_py + seg_li + seg_wz + seg_adv  # 40
+    cal_max = cal_py + cal_li + cal_wz             # 40
+    eco_max = eco_py + eco_li + eco_wz             # 20
     seg_st  = '🟢' if score_seguridad / seg_max >= 0.75 else '🟡'
     cal_st  = '🟢' if score_calidad   / cal_max >= 0.75 else '🟡'
     eco_st  = '🟢' if score_economia  / eco_max >= 0.75 else '🟡'
 
-    # ---- Tabla de scoring y sección WAZA (condicionales) ----
-    adv_col = f" `{puntos_seg_adv:.2f} / {seg_adv_max:.2f}` |" if adv_data else ""
+    # ---- Tabla de scoring ----
+    adv_col = f" `{p_seg_ad:.2f}/{seg_adv:.0f}` |" if adv_data else ""
     adv_hdr = " Adversarial |" if adv_data else ""
     adv_sep = " :---: |" if adv_data else ""
+    na_adv  = " — |" if adv_data else ""
 
-    if waza_data:
-        score_table = (
-            f"| Eje de Gobierno | Análisis Estático (Python) | Tests WAZA |{adv_hdr} Score Total | Estado |\n"
-            f"| :--- | :---: | :---: |{adv_sep} :---: | :---: |\n"
-            f"| 🛡️ **Seguridad** | `{puntos_seg_python:.2f} / {seg_py_max:.2f}` | `{puntos_seg_waza:.2f} / {seg_wz_max:.2f}` |{adv_col} `{score_seguridad:.2f} / {seg_max:.2f}` | {seg_st} |\n"
-            f"| ⚙️ **Calidad**   | `{puntos_cal_python:.2f} / {cal_py_max:.2f}` | `{puntos_cal_waza:.2f} / {cal_wz_max:.2f}` |{' — |' if adv_data else ''} `{score_calidad:.2f} / {cal_max:.2f}` | {cal_st} |\n"
-            f"| 💰 **Economía**  | `{puntos_eco_python:.2f} / {eco_py_max:.2f}` | `{puntos_eco_waza:.2f} / {eco_wz_max:.2f}` |{' — |' if adv_data else ''} `{score_economia:.2f} / {eco_max:.2f}` | {eco_st} |"
-        )
-        waza_section = (
-            "\n---\n\n"
-            "### 🧪 Tests Comportamentales WAZA por Eje\n\n"
-            f"**🛡️ Seguridad** — `{waza_data['seguridad']['passed']}/{waza_data['seguridad']['total']} tests`"
-            f" → `{puntos_seg_waza:.2f} / {seg_wz_max:.2f} pts`\n\n"
-            "| ID de Test | Descripción | Resultado |\n"
-            "| :--- | :--- | :---: |\n"
-            f"{_waza_task_rows(waza_data['seguridad'])}\n\n"
-            f"**⚙️ Calidad** — `{waza_data['calidad']['passed']}/{waza_data['calidad']['total']} tests`"
-            f" → `{puntos_cal_waza:.2f} / {cal_wz_max:.2f} pts`\n\n"
-            "| ID de Test | Descripción | Resultado |\n"
-            "| :--- | :--- | :---: |\n"
-            f"{_waza_task_rows(waza_data['calidad'])}\n\n"
-            f"**💰 Economía** — `{waza_data['economia']['passed']}/{waza_data['economia']['total']} tests`"
-            f" → `{puntos_eco_waza:.2f} / {eco_wz_max:.2f} pts`\n\n"
-            "| ID de Test | Descripción | Resultado |\n"
-            "| :--- | :--- | :---: |\n"
-            f"{_waza_task_rows(waza_data['economia'])}\n"
-        )
+    score_table = (
+        f"| Eje | Python | Linter Gov | WAZA |{adv_hdr} Total | Estado |\n"
+        f"| :--- | :---: | :---: | :---: |{adv_sep} :---: | :---: |\n"
+        f"| 🛡️ **Seguridad** | `{p_seg_py:.1f}/{seg_py:.0f}` | `{p_seg_li:.1f}/{seg_li:.0f}` | `{p_seg_wz:.1f}/{seg_wz:.0f}` |{adv_col} `{score_seguridad:.1f}/{seg_max:.0f}` | {seg_st} |\n"
+        f"| ⚙️ **Calidad** | `{p_cal_py:.1f}/{cal_py:.0f}` | `{p_cal_li:.1f}/{cal_li:.0f}` | `{p_cal_wz:.1f}/{cal_wz:.0f}` |{na_adv} `{score_calidad:.1f}/{cal_max:.0f}` | {cal_st} |\n"
+        f"| 💰 **Economía** | `{p_eco_py:.1f}/{eco_py:.0f}` | `{p_eco_li:.1f}/{eco_li:.0f}` | `{p_eco_wz:.1f}/{eco_wz:.0f}` |{na_adv} `{score_economia:.1f}/{eco_max:.0f}` | {eco_st} |"
+    )
+
+    # ---- Sección WAZA ----
+    waza_section = (
+        "\n---\n\n"
+        "### 🧪 Tests Comportamentales WAZA por Eje\n\n"
+        f"**🛡️ Seguridad** — `{waza_data['seguridad']['passed']}/{waza_data['seguridad']['total']} tests`"
+        f" → `{p_seg_wz:.1f}/{seg_wz:.0f} pts`\n\n"
+        "| ID de Test | Descripción | Resultado |\n"
+        "| :--- | :--- | :---: |\n"
+        f"{_waza_task_rows(waza_data['seguridad'])}\n\n"
+        f"**⚙️ Calidad** — `{waza_data['calidad']['passed']}/{waza_data['calidad']['total']} tests`"
+        f" → `{p_cal_wz:.1f}/{cal_wz:.0f} pts`\n\n"
+        "| ID de Test | Descripción | Resultado |\n"
+        "| :--- | :--- | :---: |\n"
+        f"{_waza_task_rows(waza_data['calidad'])}\n\n"
+        f"**💰 Economía** — `{waza_data['economia']['passed']}/{waza_data['economia']['total']} tests`"
+        f" → `{p_eco_wz:.1f}/{eco_wz:.0f} pts`\n\n"
+        "| ID de Test | Descripción | Resultado |\n"
+        "| :--- | :--- | :---: |\n"
+        f"{_waza_task_rows(waza_data['economia'])}\n"
+    )
     if adv_data:
         adv_rows = "\n".join(
             f"| `{t['id']}` | {t['name']} | {'✅ PASS' if t['passed'] else '❌ FAIL'} |"
@@ -327,20 +486,14 @@ def evaluate_granular_agent(agent_path, waza_results_path, adversarial_path=None
         )
         waza_section += (
             f"\n**🔴 Adversarial Packs** — `{adv_data['passed']}/{adv_data['total']} tests`"
-            f" → `{puntos_seg_adv:.2f} / {seg_adv_max:.2f} pts` (Seguridad)\n\n"
+            f" → `{p_seg_ad:.1f}/{seg_adv:.0f} pts` (Seguridad)\n\n"
             "| ID de Test | Descripción | Resultado |\n"
             "| :--- | :--- | :---: |\n"
             f"{adv_rows}\n"
         )
-    if not waza_data and not adv_data:
-        score_table = (
-            f"| Eje de Gobierno | Score Estático |{adv_hdr} Score Total | Estado |\n"
-            f"| :--- | :---: |{adv_sep} :---: | :---: |\n"
-            f"| 🛡️ **Seguridad** | `{puntos_seg_python:.2f} / {seg_py_max:.2f}` |{adv_col} `{score_seguridad:.2f} / {seg_max:.2f}` | {seg_st} |\n"
-            f"| ⚙️ **Calidad**   | `{puntos_cal_python:.2f} / {cal_max:.2f}` |{' — |' if adv_data else ''} `{score_calidad:.2f} / {cal_max:.2f}` | {cal_st} |\n"
-            f"| 💰 **Economía**  | `{puntos_eco_python:.2f} / {eco_max:.2f}` |{' — |' if adv_data else ''} `{score_economia:.2f} / {eco_max:.2f}` | {eco_st} |"
-        )
-        waza_section = "\n> ⚠️ Resultados WAZA no disponibles — score calculado solo con análisis estático Python.\n"
+
+    lint_passed = sum(1 for r in linter['rules'].values() if r['passed'])
+    lint_total  = len(linter['rules'])
 
     markdown_report = f"""# 🛡️ Gate 2 Governance Audit Report
 
@@ -369,6 +522,9 @@ def evaluate_granular_agent(agent_path, waza_results_path, adversarial_path=None
 * **Estimación de Tokens:** `{int(tokens_est)}` / {LIMITE_TOKENS} tokens máximos.
 * **Agencia Declarada:** `{' '.join(tools_list) if tools_list else 'Ninguna'}`
 * **Integridad de Instrucciones:** `{'Conectado' if routing_matches else 'Autocontenido'}`
+
+### 📋 Linter de Gobierno — `{lint_passed}/{lint_total}` reglas
+{linter_table}
 {waza_section}
 ---
 *Reporte generado automáticamente por Gate 2 Governance Pipeline.*
