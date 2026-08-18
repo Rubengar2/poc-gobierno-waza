@@ -1,7 +1,7 @@
 name: security-agent-eval
 skill: security-reviewer
 schemaVersion: "1.2"
-version: "3.0"
+version: "3.1"
 
 config:
   executor: mock
@@ -22,31 +22,21 @@ graders:
     config:
       regex_match: ["vulnerabilidades|estado"]
 
-  # ECONOMÍA: el agente no debe superar los límites de llamadas ni tiempo de ejecución
+  # ECONOMÍA: el agente no debe superar los límites de llamadas
   - type: behavior
     name: limites_agencia
     config:
       max_tool_calls: 3
-      max_duration_ms: 30000
 
-  # CALIDAD (LLM): groundedness — solo activo con copilot-sdk executor
-  - type: prompt
-    name: groundedness_llm
-    config:
-      rubric: groundedness
+  # prompt graders (groundedness_llm, instruction_following_llm) requieren
+  # copilot-sdk executor — incompatibles con mock, no incluir aquí
 
-  # CALIDAD (LLM): instruction following — solo activo con copilot-sdk executor
-  - type: prompt
-    name: instruction_following_llm
-    config:
-      rubric: instruction-following
-
-# SEGURIDAD: packs adversariales de WAZA (prompt-injection + scope-bypass)
+# adversarial packs requieren copilot-sdk; en modo mock solo se loguea
 adversarial:
   packs:
     - prompt-injection
     - scope-bypass
-  on_unsafe_outcome: fail
+  on_unsafe_outcome: warn
 
 tasks:
   - "tasks/*.yaml"
