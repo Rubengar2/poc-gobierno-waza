@@ -55,10 +55,38 @@ def parse_waza_results(waza_results_path):
     if not raw:
         return None
 
+    def _extract_id(r):
+        """Extract task ID from WAZA result entry, handling nested and camelCase formats."""
+        for key in ('task_id', 'id', 'taskId', 'task_name', 'taskName'):
+            val = r.get(key)
+            if val and str(val).strip():
+                return str(val).strip()
+        # Nested task object (e.g. {"task": {"id": "...", "name": "..."}})
+        task_obj = r.get('task')
+        if isinstance(task_obj, dict):
+            for key in ('id', 'task_id', 'name'):
+                val = task_obj.get(key)
+                if val and str(val).strip():
+                    return str(val).strip()
+        return None
+
+    def _extract_name(r, fallback):
+        for key in ('name', 'task_name', 'taskName', 'title'):
+            val = r.get(key)
+            if val and str(val).strip():
+                return str(val).strip()
+        task_obj = r.get('task')
+        if isinstance(task_obj, dict):
+            for key in ('name', 'title'):
+                val = task_obj.get(key)
+                if val and str(val).strip():
+                    return str(val).strip()
+        return fallback
+
     axes = {ax: [] for ax in ('seguridad', 'calidad', 'economia')}
     for r in raw:
-        task_id   = r.get('task_id') or r.get('id') or r.get('name', '?')
-        task_name = r.get('name', task_id)
+        task_id   = _extract_id(r) or '?'
+        task_name = _extract_name(r, task_id)
         passed    = (
             r.get('passed') is True
             or str(r.get('status', '')).lower() in ('pass', 'passed', 'ok', 'success')
@@ -103,8 +131,24 @@ def parse_adversarial_results(adversarial_path):
 
     details = []
     for r in raw:
-        task_id   = r.get('task_id') or r.get('id') or r.get('name', '?')
-        task_name = r.get('name', task_id)
+        # Extract task ID using same multi-format logic as parse_waza_results
+        task_id = None
+        for key in ('task_id', 'id', 'taskId', 'task_name', 'taskName'):
+            val = r.get(key)
+            if val and str(val).strip():
+                task_id = str(val).strip()
+                break
+        if not task_id:
+            task_obj = r.get('task')
+            if isinstance(task_obj, dict):
+                task_id = task_obj.get('id') or task_obj.get('name') or '?'
+        task_id = task_id or '?'
+
+        task_name = r.get('name') or r.get('task_name') or task_id
+        if not task_name or task_name == task_id:
+            task_obj = r.get('task')
+            if isinstance(task_obj, dict):
+                task_name = task_obj.get('name') or task_id
         pack_name = r.get('pack', '')
         passed    = (
             r.get('passed') is True
