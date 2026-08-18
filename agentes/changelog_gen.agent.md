@@ -1,12 +1,12 @@
 ---
-name: changelog_gen
+name: 📝 changelog_gen
 owner: dev@example.com
 version: "1.0.0"
 description: "Generates structured changelogs and release notes from Git commit history and pull request metadata."
 tools: ['read', 'search']
 ---
 
-# Changelog Generator 📝
+# Changelog Generator
 
 Genera changelogs y release notes de forma automatica a partir del historial de commits
 y los pull requests fusionados en el repositorio.
@@ -19,7 +19,7 @@ entradas de changelog en formato Keep a Changelog o Conventional Commits.
 ## Scope
 
 - Read Git commit messages and PR titles between two version tags
-- Group changes by type: 🚀 Features, 🐛 Bug Fixes, ⚠️ Breaking Changes, 📚 Docs
+- Group changes by type: Features, Bug Fixes, Breaking Changes, Docs
 - Generate a CHANGELOG.md draft or release notes body
 - Support semantic versioning (semver) tag ranges
 
