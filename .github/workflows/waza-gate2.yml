@@ -4,14 +4,16 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'agentes/reports/**'   # evita bucle infinito cuando el bot commitea reportes
 
 jobs:
   evaluar-calidad-economia:
     name: evaluar-calidad-economia
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: write # Permite al bot publicar comentarios en el PR
+      contents: write         # necesario para commitear reportes de vuelta a la rama
+      pull-requests: write    # permite al bot publicar comentarios en el PR
 
     steps:
       - name: Descargar Repositorio
@@ -100,3 +102,16 @@ jobs:
         with:
           name: gate2-audit-reports
           path: agentes/reports/
+
+      - name: Persistir Reportes en la Rama del PR
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add agentes/reports/ 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "ci(gate2): governance audit reports $(date -u +%Y-%m-%d) [skip ci]"
+            git push origin HEAD:${{ github.head_ref }}
+          else
+            echo "Sin cambios en reportes, nada que commitear."
+          fi
