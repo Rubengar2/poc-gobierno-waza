@@ -1,6 +1,6 @@
 ---
 name: ☁️ cloud_architect
-owner: architecture.team@enterprise.com
+owner: architecture1.team@enterprise.com
 version: "1.0.0"
 description: "Specialized cloud platform agent for designing Azure/AWS infrastructure templates, auditing IAM policies, and enforcing FinOps budget limits."
 tools: ['read', 'search', 'edit']
