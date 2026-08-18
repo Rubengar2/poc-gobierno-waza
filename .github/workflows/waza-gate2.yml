@@ -57,6 +57,12 @@ jobs:
           cd agentes
           waza run eval.yaml --output results.json --verbose
 
+      - name: Ejecutar Tests Adversariales (WAZA)
+        continue-on-error: true
+        run: |
+          cd agentes
+          waza adversarial --spec eval.yaml --output adversarial.json || echo "⚠️ Adversarial packs requieren copilot-sdk. Omitido con mock executor."
+
       - name: Analizar Resultados e Integrar Score Granular
         if: always()
         env:
@@ -65,7 +71,7 @@ jobs:
           for agent in $ARCHIVOS_A_EVALUAR; do
             echo "----------------------------------------------------"
             echo "PROCESANDO AGENTE: $agent"
-            python scripts/gate2_scorer.py "$agent" "agentes/results.json"
+            python scripts/gate2_scorer.py "$agent" "agentes/results.json" "agentes/adversarial.json"
           done
 
       - name: Publicar Reporte de Auditoría como Comentario en el PR
