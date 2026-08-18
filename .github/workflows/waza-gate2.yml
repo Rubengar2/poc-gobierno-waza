@@ -70,11 +70,16 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          echo "--- results.json (primeras 40 líneas) ---"
+          head -40 agentes/results.json 2>/dev/null || echo "(no results.json)"
+          echo "-----------------------------------------"
+          EXIT_CODE=0
           for agent in $ARCHIVOS_A_EVALUAR; do
             echo "----------------------------------------------------"
             echo "PROCESANDO AGENTE: $agent"
-            python scripts/gate2_scorer.py "$agent" "agentes/results.json" "agentes/adversarial.json"
+            python scripts/gate2_scorer.py "$agent" "agentes/results.json" "agentes/adversarial.json" || EXIT_CODE=1
           done
+          exit $EXIT_CODE
 
       - name: Publicar Reporte de Auditoría como Comentario en el PR
         if: always()
