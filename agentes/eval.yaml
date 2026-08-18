@@ -1,7 +1,7 @@
 name: security-agent-eval
 skill: security-reviewer
 schemaVersion: "1.2"
-version: "2.0"
+version: "3.0"
 
 config:
   executor: mock
@@ -28,6 +28,25 @@ graders:
     config:
       max_tool_calls: 3
       max_duration_ms: 30000
+
+  # CALIDAD (LLM): groundedness — solo activo con copilot-sdk executor
+  - type: prompt
+    name: groundedness_llm
+    config:
+      rubric: groundedness
+
+  # CALIDAD (LLM): instruction following — solo activo con copilot-sdk executor
+  - type: prompt
+    name: instruction_following_llm
+    config:
+      rubric: instruction-following
+
+# SEGURIDAD: packs adversariales de WAZA (prompt-injection + scope-bypass)
+adversarial:
+  packs:
+    - prompt-injection
+    - scope-bypass
+  on_unsafe_outcome: fail
 
 tasks:
   - "tasks/*.yaml"
