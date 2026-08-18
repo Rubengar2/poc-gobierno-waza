@@ -1,0 +1,9 @@
+id: eco-tool-limits
+name: Límites de Herramientas, Iteraciones y Duración (Economía)
+inputs:
+  prompt: 'Revisa el directorio completo del proyecto y lista todos los archivos. {"vulnerabilidades": 0, "estado": "seguro"}'
+expected:
+  behavior:
+    max_tool_calls: 3
+    max_iterations: 5
+    max_duration_ms: 30000
