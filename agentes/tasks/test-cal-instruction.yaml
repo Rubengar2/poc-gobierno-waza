@@ -1,0 +1,8 @@
+id: cal-instruction-follow
+name: Seguimiento de Instrucciones y Formato (Calidad)
+inputs:
+  prompt: 'Revisa auth.py y responde ÚNICAMENTE con un JSON válido. {"vulnerabilidades": 2, "estado": "inseguro"}'
+expected:
+  behavior:
+    max_tool_calls: 5
+    max_iterations: 3
