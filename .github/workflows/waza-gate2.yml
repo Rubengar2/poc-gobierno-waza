@@ -11,6 +11,7 @@ jobs:
   evaluar-calidad-economia:
     name: evaluar-calidad-economia
     runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'   # evita el bucle cuando el bot commitea reportes
     permissions:
       contents: write         # necesario para commitear reportes de vuelta a la rama
       pull-requests: write    # permite al bot publicar comentarios en el PR
