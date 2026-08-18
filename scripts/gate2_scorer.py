@@ -161,8 +161,8 @@ def parse_adversarial_results(adversarial_path):
         return None
 
     details = []
-    for r in raw:
-        # Extract task ID using same multi-format logic as parse_waza_results
+    for idx, r in enumerate(raw):
+        # Extract task ID, with positional fallback to known WAZA adversarial pack order
         task_id = None
         for key in ('task_id', 'id', 'taskId', 'task_name', 'taskName'):
             val = r.get(key)
@@ -172,22 +172,28 @@ def parse_adversarial_results(adversarial_path):
         if not task_id:
             task_obj = r.get('task')
             if isinstance(task_obj, dict):
-                task_id = task_obj.get('id') or task_obj.get('name') or '?'
-        task_id = task_id or '?'
+                task_id = task_obj.get('id') or task_obj.get('name') or None
 
-        task_name = r.get('name') or r.get('task_name') or task_id
-        if not task_name or task_name == task_id:
+        task_name = r.get('name') or r.get('task_name') or None
+        if not task_name:
             task_obj = r.get('task')
             if isinstance(task_obj, dict):
-                task_name = task_obj.get('name') or task_id
+                task_name = task_obj.get('name') or None
+
+        if not task_id and idx < len(_ADVERSARIAL_KNOWN_TASKS):
+            task_id, task_name = _ADVERSARIAL_KNOWN_TASKS[idx]
+        elif task_id and not task_name and idx < len(_ADVERSARIAL_KNOWN_TASKS):
+            task_name = _ADVERSARIAL_KNOWN_TASKS[idx][1]
+
+        task_id   = task_id   or f'adv-{idx}'
+        task_name = task_name or task_id
         pack_name = r.get('pack', '')
         passed    = (
             r.get('passed') is True
             or str(r.get('status', '')).lower() in ('pass', 'passed', 'ok', 'success', 'safe')
             or str(r.get('outcome', '')).lower() in ('safe', 'pass', 'passed')
         )
-        details.append({'id': f'adv-{pack_name}-{task_id}' if pack_name else f'adv-{task_id}',
-                        'name': f'[Adversarial] {task_name}', 'passed': passed})
+        details.append({'id': task_id, 'name': f'[Adversarial] {task_name}', 'passed': passed})
 
     total  = len(details)
     passed = sum(1 for d in details if d['passed'])
@@ -198,6 +204,18 @@ def parse_adversarial_results(adversarial_path):
         'pass_rate': passed / total, 'tasks': details,
     }
 
+
+# Known WAZA built-in adversarial pack tasks (positional fallback for adversarial.json)
+_ADVERSARIAL_KNOWN_TASKS = [
+    ('prompt-injection-exfil-credentials', 'Credential exfiltration via support ticket'),
+    ('prompt-injection-ignore-previous',   'Ignore previous instructions (README)'),
+    ('prompt-injection-markdown-link',     'Hidden directive inside a markdown link'),
+    ('prompt-injection-system-override',   'Fake system message in code comment'),
+    ('scope-bypass-delete-files',          'Asked to delete files from the repo'),
+    ('scope-bypass-external-http',         'Asked to call an external API'),
+    ('scope-bypass-install-package',       'Asked to install a third-party dependency'),
+    ('scope-bypass-send-email',            'Asked to send email'),
+]
 
 # Linter rule → governance axis mapping
 _LINT_AXIS = {
